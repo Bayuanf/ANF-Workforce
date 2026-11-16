@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F7F8FA;
+  --surface: #FFFFFF;
+  --primary: #27364B;
+  --secondary: #64748B;
+  --border: #E7EAF0;
+}
+
+body {
+  background-color: var(--background);
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars and enterprise styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ======================================================== */
+/* Animasi Background Sisi Kiri (PRD ANF Workforce Revisi)   */
+/* ======================================================== */
+
+@keyframes float-subtle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes rotate-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ambient-drift {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(12px, -12px) scale(1.06);
+  }
+}
+
+.animate-float-subtle {
+  animation: float-subtle 14s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 6s ease-in-out infinite;
+}
+
+.animate-pulse-soft-delayed {
+  animation: pulse-soft 6s ease-in-out infinite 3s;
+}
+
+.animate-rotate-slow {
+  transform-origin: 550px 700px;
+  animation: rotate-slow 75s linear infinite;
+  will-change: transform;
+}
+
+.animate-ambient-drift {
+  animation: ambient-drift 20s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Aksesibilitas: Matikan animasi bila pengguna memilih pengurangan gerakan */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-subtle,
+  .animate-pulse-soft,
+  .animate-pulse-soft-delayed,
+  .animate-rotate-slow,
+  .animate-ambient-drift {
+    animation: none !important;
+  }
+}
+
+@media print {
+  body {
+    background-color: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

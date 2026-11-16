@@ -1,0 +1,227 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String               @id @default(cuid())
+  username            String               @unique
+  email               String               @unique
+  passwordHash        String
+  role                String               // "HR", "MANAGER", "EMPLOYEE"
+  status              String               @default("ACTIVE") // "ACTIVE", "INACTIVE"
+  failedLoginAttempts Int                  @default(0)
+  lockoutUntil        DateTime?
+  employee            Employee?
+  reviewsConducted    LatenessReview[]
+  reviewHistories     LatenessReviewHistory[]
+  leaveApprovals      LeaveRequest[]       @relation("ManagerLeaveApprovals")
+  overtimeApprovals   OvertimeRequest[]    @relation("ManagerOvertimeApprovals")
+  managedDepartments  Department[]         @relation("DepartmentManager")
+  subordinates        Employee[]           @relation("EmployeeManager")
+  auditLogs           AuditLog[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model Department {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  code        String      @unique
+  managerId   String?
+  manager     User?       @relation("DepartmentManager", fields: [managerId], references: [id])
+  positions   Position[]
+  employees   Employee[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Position {
+  id           String      @id @default(cuid())
+  title        String
+  departmentId String
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  employees    Employee[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Employee {
+  id               String            @id @default(cuid())
+  userId           String            @unique
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employeeCode     String            @unique // e.g. ANF-001
+  fullName         String
+  email            String            @unique
+  phone            String?
+  departmentId     String
+  department       Department        @relation(fields: [departmentId], references: [id])
+  positionId       String
+  position         Position          @relation(fields: [positionId], references: [id])
+  managerId        String?
+  manager          User?             @relation("EmployeeManager", fields: [managerId], references: [id])
+  joinDate         DateTime
+  basicSalary      Float             @default(0)
+  status           String            @default("ACTIVE") // "ACTIVE", "INACTIVE"
+  attendanceRecords AttendanceRecord[]
+  leaveRequests    LeaveRequest[]
+  overtimeRequests OvertimeRequest[]
+  payrollRecords   PayrollRecord[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model AttendanceImport {
+  id            String                @id @default(cuid())
+  fileName      String
+  fileType      String
+  totalRows     Int                   @default(0)
+  validRows     Int                   @default(0)
+  invalidRows   Int                   @default(0)
+  duplicateRows Int                   @default(0)
+  importedBy    String
+  rawRecords    RawAttendanceRecord[]
+  createdAt     DateTime              @default(now())
+}
+
+model RawAttendanceRecord {
+  id           String           @id @default(cuid())
+  importId     String
+  import       AttendanceImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  employeeCode String
+  scanTime     DateTime
+  status       String           // "VALID", "INVALID", "DUPLICATE"
+  errorMessage String?
+  rawText      String?
+  createdAt    DateTime         @default(now())
+}
+
+model AttendanceRecord {
+  id           String          @id @default(cuid())
+  employeeId   String
+  employee     Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date         String          // YYYY-MM-DD
+  checkIn      DateTime?
+  checkOut     DateTime?
+  workHours    Float?          // Effective work hours
+  status       String          // "ON_TIME", "LATE", "INCOMPLETE", "ABSENT"
+  notes        String?
+  latenessReview LatenessReview?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([employeeId, date])
+}
+
+model LatenessReview {
+  id                 String                  @id @default(cuid())
+  attendanceRecordId String                  @unique
+  attendanceRecord   AttendanceRecord        @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  reviewerId         String?
+  reviewer           User?                   @relation(fields: [reviewerId], references: [id])
+  status             String                  @default("PENDING") // "PENDING", "REVIEWED"
+  decision           String?                 // "EXCUSED", "WARNING", "UNEXCUSED", "EMERGENCY", "OTHER"
+  reviewNotes        String?
+  reviewedAt         DateTime?
+  history            LatenessReviewHistory[]
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+}
+
+model LatenessReviewHistory {
+  id               String         @id @default(cuid())
+  latenessReviewId String
+  latenessReview   LatenessReview @relation(fields: [latenessReviewId], references: [id], onDelete: Cascade)
+  reviewerId       String
+  reviewer         User           @relation(fields: [reviewerId], references: [id])
+  oldDecision      String?
+  newDecision      String
+  oldNotes         String?
+  newNotes         String
+  changedAt        DateTime       @default(now())
+}
+
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type        String    // "ANNUAL_LEAVE", "SICK", "PERMISSION", "OTHER"
+  startDate   String    // YYYY-MM-DD
+  endDate     String    // YYYY-MM-DD
+  totalDays   Int
+  reason      String
+  status      String    @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  reviewerId  String?
+  reviewer    User?     @relation("ManagerLeaveApprovals", fields: [reviewerId], references: [id])
+  reviewNotes String?
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model OvertimeRequest {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date          String    // YYYY-MM-DD
+  startTime     String    // HH:mm
+  endTime       String    // HH:mm
+  durationHours Float
+  taskDescription String
+  status        String    @default("PENDING") // "PENDING", "APPROVED", "REJECTED"
+  reviewerId    String?
+  reviewer      User?     @relation("ManagerOvertimeApprovals", fields: [reviewerId], references: [id])
+  reviewNotes   String?
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PayrollPeriod {
+  id          String          @id @default(cuid())
+  name        String          // e.g. "November 2026"
+  startDate   String          // YYYY-MM-DD
+  endDate     String          // YYYY-MM-DD
+  status      String          @default("DRAFT") // "DRAFT", "FINALIZED"
+  finalizedAt DateTime?
+  records     PayrollRecord[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model PayrollRecord {
+  id              String        @id @default(cuid())
+  payrollPeriodId String
+  payrollPeriod   PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  basicSalary     Float
+  allowance       Float         @default(0)
+  overtimePay     Float         @default(0)
+  deduction       Float         @default(0)
+  netSalary       Float
+  notes           String?
+  status          String        @default("DRAFT") // "DRAFT", "FINALIZED"
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([payrollPeriodId, employeeId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userRole   String?
+  action     String   // "LOGIN", "LOGOUT", "IMPORT_FINGERPRINT", "REVIEW_LATENESS", "UPDATE_REVIEW", "APPROVE_LEAVE", "REJECT_LEAVE", "APPROVE_OVERTIME", "REJECT_OVERTIME", "GENERATE_PAYROLL", "FINALIZE_PAYROLL", "CREATE_EMPLOYEE", "UPDATE_EMPLOYEE", "EXPORT_REPORT"
+  entityName String
+  entityId   String?
+  oldValues  String?  // JSON string
+  newValues  String?  // JSON string
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
