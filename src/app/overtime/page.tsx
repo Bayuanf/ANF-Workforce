@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -41,18 +42,42 @@ export default function OvertimePage() {
       const res = await fetch("/api/overtime-requests");
       const data = await res.json();
       setRequests(data.requests || []);
-    } catch {} finally {
+    } catch {
+      setRequests([]);
+    } finally {
       setLoading(false);
     }
   };
 
+  // Periksa identitas sebelum mengambil data lembur
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((userData) => {
+    const checkUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const userData = await res.json();
+
+        if (!res.ok || !userData.user) {
+          setCurrentUser(null);
+          setLoading(false);
+          return;
+        }
+
         setCurrentUser(userData.user);
+
+        // DEMO tidak boleh mengambil data lembur
+        if (userData.user.role === "DEMO") {
+          setLoading(false);
+          return;
+        }
+
         fetchRequests();
-      });
+      } catch {
+        setCurrentUser(null);
+        setLoading(false);
+      }
+    };
+
+    checkUser();
   }, []);
 
   // Hitung estimasi durasi lembur otomatis dari jam mulai dan jam selesai
@@ -144,6 +169,58 @@ export default function OvertimePage() {
   const isEmployee = currentUser?.role === "EMPLOYEE";
   const isManager = currentUser?.role === "MANAGER";
   const isHr = currentUser?.role === "HR";
+  const isDemo = currentUser?.role === "DEMO";
+
+  // Tampilan loading saat memeriksa sesi pengguna
+  if (loading && !currentUser) {
+    return (
+      <AppLayout>
+        <div className="py-12 text-center text-xs text-secondary">
+          Memeriksa sesi pengguna...
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Halaman khusus DEMO
+  if (isDemo) {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 text-center shadow-sm">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+              <Timer className="w-7 h-7 text-amber-600" />
+            </div>
+
+            <div className="inline-block px-3 py-1 mb-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold tracking-wide">
+              DEMO · READ ONLY
+            </div>
+
+            <h1 className="text-lg font-bold text-primary mb-2">
+              Akses Fitur Dibatasi
+            </h1>
+
+            <p className="text-sm text-secondary leading-relaxed">
+              Halaman Pengajuan & Pengelolaan Lembur tidak tersedia dalam mode
+              demonstrasi. Anda tetap dapat menjelajahi Dashboard untuk melihat
+              simulasi sistem ANF Workforce.
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Tampilan jika sesi pengguna tidak ditemukan
+  if (!currentUser) {
+    return (
+      <AppLayout>
+        <div className="py-12 text-center text-xs text-secondary">
+          Sesi pengguna tidak ditemukan. Silakan login kembali.
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>

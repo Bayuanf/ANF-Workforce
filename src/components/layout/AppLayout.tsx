@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -18,7 +19,6 @@ import {
   Menu,
   X,
   LogOut,
-  Building2,
   UserCheck,
 } from "lucide-react";
 
@@ -26,7 +26,7 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-// Client-side session cache agar navigasi antar halaman berlangsung instan (0 detik) tanpa blocking loading
+// Client-side session cache agar navigasi antar halaman berlangsung instan
 let memoryUserCache: any = null;
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -34,7 +34,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Inisialisasi langsung dari cache jika tersedia
   const [currentUser, setCurrentUser] = useState<any>(() => {
     if (memoryUserCache) return memoryUserCache;
     if (typeof window !== "undefined") {
@@ -55,7 +54,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
   });
 
   useEffect(() => {
-    // Verifikasi sesi di background tanpa memblokir layar jika user sudah ada
     fetch("/api/auth/me")
       .then((res) => {
         if (!res.ok) {
@@ -112,11 +110,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
     );
   }
 
-  // Tentukan menu navigasi sesuai PRD Bagian 10
+  // Menu lengkap HR/ADMIN dan DEMO
   const getNavItems = () => {
     if (!currentUser) return [];
 
-    if (currentUser.role === "HR") {
+    if (currentUser.role === "HR" || currentUser.role === "DEMO") {
       return [
         { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
         { label: "Data Karyawan", href: "/employees", icon: Users },
@@ -159,8 +157,23 @@ export default function AppLayout({ children }: AppLayoutProps) {
         return "bg-primary text-white";
       case "MANAGER":
         return "bg-[#334155] text-white";
+      case "DEMO":
+        return "bg-amber-100 text-amber-800";
       default:
         return "bg-secondary-light text-secondary";
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "HR":
+        return "HR / ADMIN";
+      case "MANAGER":
+        return "MANAGER";
+      case "DEMO":
+        return "DEMO · READ ONLY";
+      default:
+        return "KARYAWAN";
     }
   };
 
@@ -229,7 +242,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           })}
         </div>
 
-        {/* User Card & Logout at Sidebar Footer */}
+        {/* User Card & Logout */}
         <div className="p-4 border-t border-border bg-[#FAFAFC]">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-slate-200 text-primary flex items-center justify-center font-medium text-xs">
@@ -245,11 +258,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                     currentUser?.role
                   )}`}
                 >
-                  {currentUser?.role === "HR"
-                    ? "HR / ADMIN"
-                    : currentUser?.role === "MANAGER"
-                    ? "MANAGER"
-                    : "KARYAWAN"}
+                  {getRoleLabel(currentUser?.role)}
                 </span>
                 {currentUser?.departmentName && (
                   <span className="text-[10px] text-secondary truncate">

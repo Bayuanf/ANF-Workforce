@@ -55,22 +55,42 @@ export default function EmployeesPage() {
     } catch {}
   };
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/auth/me").then((r) => r.json()),
-      fetch("/api/departments").then((r) => r.json()),
-    ]).then(([userData, deptData]) => {
+useEffect(() => {
+  const initializePage = async () => {
+    try {
+      const userRes = await fetch("/api/auth/me");
+      const userData = await userRes.json();
+
       setCurrentUser(userData.user);
+
+      // Akun DEMO tidak boleh mengambil data karyawan/departemen.
+      if (userData.user?.role === "DEMO") {
+        setLoading(false);
+        return;
+      }
+
+      // Pengguna selain DEMO tetap menjalankan alur normal.
+      const deptRes = await fetch("/api/departments");
+      const deptData = await deptRes.json();
+
       setDepartments(deptData.departments || []);
-      fetchEmployees().then(() => setLoading(false));
-    });
-  }, []);
+
+      await fetchEmployees();
+    } catch (error) {
+      console.error("Gagal menginisialisasi halaman karyawan:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  initializePage();
+}, []);
 
   useEffect(() => {
-    if (!loading) {
-      fetchEmployees();
-    }
-  }, [search, selectedDept]);
+  if (!loading && currentUser?.role !== "DEMO") {
+    fetchEmployees();
+  }
+}, [search, selectedDept, loading, currentUser]);
 
   // Posisi yang tersedia berdasarkan departemen yang dipilih
   const availablePositions =
@@ -186,10 +206,47 @@ export default function EmployeesPage() {
       setSubmitting(false);
     }
   };
-
   const isHr = currentUser?.role === "HR";
 
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-secondary">Memuat halaman...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (currentUser?.role === "DEMO") {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center bg-white border border-border rounded-xl p-8 shadow-sm">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-100 flex items-center justify-center">
+              <Users className="w-8 h-8 text-amber-600" />
+            </div>
+
+            <h1 className="text-xl font-bold text-primary mb-2">
+              Akses Fitur Dibatasi
+            </h1>
+
+            <p className="text-sm text-secondary leading-relaxed mb-5">
+              Fitur Data Karyawan tidak tersedia untuk akun DEMO.
+              Silakan gunakan Dashboard untuk melihat simulasi ANF Workforce.
+            </p>
+
+            <span className="inline-flex px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+              DEMO · READ ONLY
+            </span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
+
     <AppLayout>
       <div className="space-y-6">
         {/* Header Halaman */}

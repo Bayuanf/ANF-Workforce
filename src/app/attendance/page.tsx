@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
@@ -33,30 +32,97 @@ export default function AttendancePage() {
       const res = await fetch(url);
       const data = await res.json();
       setRecords(data.records || []);
-    } catch {} finally {
+    } catch (error) {
+      console.error("Gagal mengambil data kehadiran:", error);
+    } finally {
       setLoading(false);
     }
   };
 
+  // Inisialisasi halaman dan pemeriksaan role pengguna.
   useEffect(() => {
-    Promise.all([
-      fetch("/api/auth/me").then((r) => r.json()),
-      fetch("/api/departments").then((r) => r.json()),
-    ]).then(([userData, deptData]) => {
-      setCurrentUser(userData.user);
-      setDepartments(deptData.departments || []);
-      fetchAttendance();
-    });
+    const initializePage = async () => {
+      try {
+        const userRes = await fetch("/api/auth/me");
+        const userData = await userRes.json();
+
+        setCurrentUser(userData.user);
+
+        // Akun DEMO tidak boleh mengambil data kehadiran/departemen.
+        if (userData.user?.role === "DEMO") {
+          setLoading(false);
+          return;
+        }
+
+        const deptRes = await fetch("/api/departments");
+        const deptData = await deptRes.json();
+
+        setDepartments(deptData.departments || []);
+
+        await fetchAttendance();
+      } catch (error) {
+        console.error(
+          "Gagal menginisialisasi halaman kehadiran:",
+          error
+        );
+        setLoading(false);
+      }
+    };
+
+    initializePage();
   }, []);
 
+  // Filter hanya berjalan untuk pengguna selain DEMO.
   useEffect(() => {
-    if (currentUser) {
+    if (!loading && currentUser && currentUser.role !== "DEMO") {
       fetchAttendance();
     }
   }, [selectedMonth, selectedDept, selectedStatus]);
 
   const isHr = currentUser?.role === "HR";
   const isManager = currentUser?.role === "MANAGER";
+
+  // Tampilan loading.
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-secondary">
+            Memuat halaman...
+          </p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Halaman khusus akun DEMO.
+  if (currentUser?.role === "DEMO") {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center bg-white border border-border rounded-xl p-8 shadow-sm">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-100 flex items-center justify-center">
+              <CalendarCheck className="w-8 h-8 text-amber-600" />
+            </div>
+
+            <h1 className="text-xl font-bold text-primary mb-2">
+              Akses Fitur Dibatasi
+            </h1>
+
+            <p className="text-sm text-secondary leading-relaxed mb-5">
+              Fitur Kehadiran tidak tersedia untuk akun DEMO.
+              Silakan gunakan Dashboard untuk melihat simulasi
+              ANF Workforce.
+            </p>
+
+            <span className="inline-flex px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+              DEMO · READ ONLY
+            </span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -77,7 +143,9 @@ export default function AttendancePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-secondary">Periode Bulan:</span>
+            <span className="text-xs text-secondary">
+              Periode Bulan:
+            </span>
             <input
               type="month"
               value={selectedMonth}
@@ -112,7 +180,9 @@ export default function AttendancePage() {
             <option value="">Semua Status Kehadiran</option>
             <option value="ON_TIME">Tepat Waktu (s/d 08.10)</option>
             <option value="LATE">Terlambat (&gt; 08.10)</option>
-            <option value="INCOMPLETE">Kehadiran Tidak Lengkap (1 scan)</option>
+            <option value="INCOMPLETE">
+              Kehadiran Tidak Lengkap (1 scan)
+            </option>
           </select>
         </div>
 
@@ -140,9 +210,15 @@ export default function AttendancePage() {
                     )}
                     <th className="py-3 px-4">Jam Masuk</th>
                     <th className="py-3 px-4">Jam Pulang</th>
-                    <th className="py-3 px-4 text-center">Durasi Kerja</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4">Hasil Pemeriksaan HR</th>
+                    <th className="py-3 px-4 text-center">
+                      Durasi Kerja
+                    </th>
+                    <th className="py-3 px-4 text-center">
+                      Status
+                    </th>
+                    <th className="py-3 px-4">
+                      Hasil Pemeriksaan HR
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border text-slate-800">
@@ -162,10 +238,14 @@ export default function AttendancePage() {
                       : "-";
 
                     return (
-                      <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
+                      <tr
+                        key={r.id}
+                        className="hover:bg-slate-50/70 transition-colors"
+                      >
                         <td className="py-3 px-4 font-mono font-medium text-slate-700">
                           {r.date}
                         </td>
+
                         {(isHr || isManager) && (
                           <>
                             <td className="py-3 px-4">
@@ -176,22 +256,30 @@ export default function AttendancePage() {
                                 {r.employee.employeeCode}
                               </div>
                             </td>
-                            <td className="py-3 px-4">{r.employee.department?.name}</td>
+                            <td className="py-3 px-4">
+                              {r.employee.department?.name}
+                            </td>
                           </>
                         )}
+
                         <td
                           className={`py-3 px-4 font-mono font-medium ${
-                            r.status === "LATE" ? "text-danger" : "text-slate-800"
+                            r.status === "LATE"
+                              ? "text-danger"
+                              : "text-slate-800"
                           }`}
                         >
                           {checkInStr}
                         </td>
+
                         <td className="py-3 px-4 font-mono text-slate-800">
                           {checkOutStr}
                         </td>
+
                         <td className="py-3 px-4 text-center font-mono">
                           {r.workHours ? `${r.workHours} Jam` : "-"}
                         </td>
+
                         <td className="py-3 px-4 text-center">
                           <span
                             className={`inline-block px-2 py-0.5 text-[10px] font-medium rounded ${
@@ -209,6 +297,7 @@ export default function AttendancePage() {
                               : "Tidak Lengkap"}
                           </span>
                         </td>
+
                         <td className="py-3 px-4 text-[11px]">
                           {r.latenessReview ? (
                             r.latenessReview.status === "REVIEWED" ? (

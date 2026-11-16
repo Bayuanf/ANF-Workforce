@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -11,8 +12,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // DEMO tidak memiliki akses ke informasi payroll atau slip gaji
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+        { error: "Akun DEMO tidak memiliki akses ke informasi penggajian." },
+        { status: 403 }
+      );
+    }
+
     if (!user.employeeId) {
-      return NextResponse.json({ error: "Profil karyawan tidak ditemukan." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Profil karyawan tidak ditemukan." },
+        { status: 400 }
+      );
     }
 
     const { searchParams } = new URL(req.url);
@@ -21,11 +33,17 @@ export async function GET(req: NextRequest) {
     // Karyawan hanya bisa melihat slip gajinya sendiri yang sudah FINALIZED
     // HR juga bisa melihat untuk pengecekan administratif jika mengirimkan query employeeId
     let targetEmployeeId = user.employeeId;
+
     if (user.role === "HR" && searchParams.get("employeeId")) {
       targetEmployeeId = searchParams.get("employeeId")!;
     } else if (user.role === "MANAGER" && targetEmployeeId !== user.employeeId) {
-      // Manager dilarang keras mengakses slip gaji orang lain
-      return NextResponse.json({ error: "Akses ditolak. Manager tidak memiliki akses penggajian." }, { status: 403 });
+      return NextResponse.json(
+        {
+          error:
+            "Akses ditolak. Manager tidak memiliki akses penggajian.",
+        },
+        { status: 403 }
+      );
     }
 
     const where: any = {
@@ -60,6 +78,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("GET /api/payroll/payslip error:", err);
-    return NextResponse.json({ error: "Gagal memuat slip gaji." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Gagal memuat slip gaji." },
+      { status: 500 }
+    );
   }
 }

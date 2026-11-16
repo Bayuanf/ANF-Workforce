@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,25 +8,42 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
+
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // DEMO tidak boleh mengakses seluruh jenis laporan
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+        { error: "Akun DEMO tidak memiliki akses ke laporan." },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type"); // "attendance" atau "payroll"
-    const month = searchParams.get("month"); // e.g. "2026-11"
+    const type = searchParams.get("type");
+    const month = searchParams.get("month");
     const departmentId = searchParams.get("departmentId");
 
     if (type === "payroll") {
       // Manager dan Karyawan dilarang mengakses laporan penggajian umum
       if (user.role !== "HR") {
-        return NextResponse.json({ error: "Akses laporan penggajian hanya diizinkan untuk HR." }, { status: 403 });
+        return NextResponse.json(
+          { error: "Akses laporan penggajian hanya diizinkan untuk HR." },
+          { status: 403 }
+        );
       }
 
       const where: any = {};
+
       if (month) {
         where.payrollPeriod = { startDate: { startsWith: month } };
       }
+
       if (departmentId) {
         where.employee = { departmentId };
       }
@@ -108,6 +126,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("GET /api/reports error:", err);
-    return NextResponse.json({ error: "Gagal memuat data laporan." }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Gagal memuat data laporan." },
+      { status: 500 }
+    );
   }
 }

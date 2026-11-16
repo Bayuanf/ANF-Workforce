@@ -17,6 +17,7 @@ import {
 
 export default function PayrollPage() {
   const [periods, setPeriods] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -54,9 +55,34 @@ export default function PayrollPage() {
     }
   };
 
-  useEffect(() => {
-    fetchPeriods();
-  }, []);
+useEffect(() => {
+  const checkUser = async () => {
+    try {
+      const res = await fetch("/api/auth/me");
+      const userData = await res.json();
+
+      if (!res.ok || !userData.user) {
+        setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
+
+      setCurrentUser(userData.user);
+
+      if (userData.user.role === "DEMO") {
+        setLoading(false);
+        return;
+      }
+
+      fetchPeriods();
+    } catch {
+      setCurrentUser(null);
+      setLoading(false);
+    }
+  };
+
+  checkUser();
+}, []);
 
   const handleCreatePeriod = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,7 +227,57 @@ export default function PayrollPage() {
   const records = selectedPeriod?.records || [];
 
   const totalPayroll = records.reduce((sum: number, r: any) => sum + r.netSalary, 0);
+  const isDemo = currentUser?.role === "DEMO";
 
+// Periksa sesi pengguna
+if (loading && !currentUser) {
+  return (
+    <AppLayout>
+      <div className="py-12 text-center text-xs text-secondary">
+        Memeriksa sesi pengguna...
+      </div>
+    </AppLayout>
+  );
+}
+
+// Halaman khusus DEMO
+if (isDemo) {
+  return (
+    <AppLayout>
+      <div className="min-h-[60vh] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 text-center shadow-sm">
+          <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+            <Lock className="w-7 h-7 text-amber-600" />
+          </div>
+
+          <div className="inline-block px-3 py-1 mb-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold tracking-wide">
+            DEMO · READ ONLY
+          </div>
+
+          <h1 className="text-lg font-bold text-primary mb-2">
+            Akses Fitur Dibatasi
+          </h1>
+
+          <p className="text-sm text-secondary leading-relaxed">
+            Fitur Pengelolaan Penggajian tidak tersedia dalam mode demonstrasi
+            karena memuat informasi keuangan dan gaji karyawan.
+            Silakan kembali ke Dashboard untuk menjelajahi simulasi ANF Workforce.
+          </p>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
+
+if (!currentUser) {
+  return (
+    <AppLayout>
+      <div className="py-12 text-center text-xs text-secondary">
+        Sesi pengguna tidak ditemukan. Silakan login kembali.
+      </div>
+    </AppLayout>
+  );
+}
   return (
     <AppLayout>
       <div className="space-y-6">

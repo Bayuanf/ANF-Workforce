@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -8,8 +9,20 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
+
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // DEMO tidak boleh mengakses data pengajuan cuti dan izin
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+        { error: "Akun DEMO tidak memiliki akses ke data pengajuan cuti dan izin." },
+        { status: 403 }
+      );
     }
 
     const { searchParams } = new URL(req.url);
@@ -52,15 +65,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ requests });
   } catch (err: any) {
     console.error("GET /api/leave-requests error:", err);
-    return NextResponse.json({ error: "Gagal memuat pengajuan cuti & izin." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Gagal memuat pengajuan cuti & izin." },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
+
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // DEMO hanya memiliki akses lihat (read-only)
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+        { error: "Akun DEMO hanya memiliki akses lihat (read-only)." },
+        { status: 403 }
+      );
     }
 
     if (!user.employeeId) {
@@ -73,9 +101,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { type, startDate, endDate, totalDays, reason } = body;
 
-    if (!type || !startDate || !endDate || !totalDays || !reason || !reason.trim()) {
+    if (
+      !type ||
+      !startDate ||
+      !endDate ||
+      !totalDays ||
+      !reason ||
+      !reason.trim()
+    ) {
       return NextResponse.json(
-        { error: "Semua kolom wajib diisi (Tipe, Tanggal Mulai, Tanggal Selesai, Jumlah Hari, Alasan)." },
+        {
+          error:
+            "Semua kolom wajib diisi (Tipe, Tanggal Mulai, Tanggal Selesai, Jumlah Hari, Alasan).",
+        },
         { status: 400 }
       );
     }
@@ -111,9 +149,15 @@ export async function POST(req: NextRequest) {
       ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1",
     });
 
-    return NextResponse.json({ success: true, request }, { status: 201 });
+    return NextResponse.json(
+      { success: true, request },
+      { status: 201 }
+    );
   } catch (err: any) {
     console.error("POST /api/leave-requests error:", err);
-    return NextResponse.json({ error: "Gagal mengajukan cuti/izin." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Gagal mengajukan cuti/izin." },
+      { status: 500 }
+    );
   }
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,6 +12,7 @@ import {
   Banknote,
   CheckCircle2,
   ClockAlert,
+  Lock,
 } from "lucide-react";
 
 export default function ReportsPage() {
@@ -21,42 +23,142 @@ export default function ReportsPage() {
   const [selectedDept, setSelectedDept] = useState("");
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionMissing, setSessionMissing] = useState(false);
 
   const fetchReport = async () => {
     setLoading(true);
+
     try {
       let url = `/api/reports?type=${reportType}&month=${selectedMonth}`;
-      if (selectedDept) url += `&departmentId=${selectedDept}`;
+
+      if (selectedDept) {
+        url += `&departmentId=${selectedDept}`;
+      }
+
       const res = await fetch(url);
       const data = await res.json();
+
+      if (!res.ok) {
+        setReportData(null);
+        return;
+      }
+
       setReportData(data);
-    } catch {} finally {
+    } catch {
+      setReportData(null);
+    } finally {
       setLoading(false);
     }
   };
 
+  // Periksa sesi dan role sebelum mengambil data laporan
   useEffect(() => {
-    Promise.all([
-      fetch("/api/auth/me").then((r) => r.json()),
-      fetch("/api/departments").then((r) => r.json()),
-    ]).then(([userData, deptData]) => {
-      setCurrentUser(userData.user);
-      setDepartments(deptData.departments || []);
-      fetchReport();
-    });
+    const checkAccess = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const userData = await res.json();
+
+        if (!res.ok || !userData.user) {
+          setSessionMissing(true);
+          setLoading(false);
+          return;
+        }
+
+        setCurrentUser(userData.user);
+
+        // DEMO tidak boleh mengambil data departemen maupun laporan
+        if (userData.user.role === "DEMO") {
+          setLoading(false);
+          return;
+        }
+
+        // Ambil departemen setelah role pengguna diketahui
+        const deptRes = await fetch("/api/departments");
+
+        if (deptRes.ok) {
+          const deptData = await deptRes.json();
+          setDepartments(deptData.departments || []);
+        }
+      } catch {
+        setSessionMissing(true);
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
   }, []);
 
+  // Ambil laporan hanya untuk pengguna selain DEMO
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && currentUser.role !== "DEMO") {
       fetchReport();
     }
-  }, [reportType, selectedMonth, selectedDept]);
+  }, [currentUser, reportType, selectedMonth, selectedDept]);
 
   const handlePrint = () => {
     window.print();
   };
 
   const isHr = currentUser?.role === "HR";
+
+  // Tampilan saat memeriksa sesi
+  if (!currentUser && !sessionMissing) {
+    return (
+      <AppLayout>
+        <div className="py-12 text-center text-xs text-secondary">
+          Memeriksa sesi pengguna...
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Tampilan jika sesi tidak ditemukan
+  if (sessionMissing) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Lock className="w-12 h-12 text-secondary mb-4" />
+          <h2 className="text-lg font-bold text-primary">
+            Sesi Pengguna Tidak Ditemukan
+          </h2>
+          <p className="text-sm text-secondary mt-2">
+            Silakan login kembali untuk mengakses halaman laporan.
+          </p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Pembatasan khusus akun DEMO
+  if (currentUser?.role === "DEMO") {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mb-5">
+            <Lock className="w-8 h-8 text-amber-600" />
+          </div>
+
+          <span className="text-[10px] font-bold tracking-widest text-amber-600 uppercase mb-2">
+            DEMO · READ ONLY
+          </span>
+
+          <h2 className="text-xl font-bold text-primary">
+            Akses Fitur Dibatasi
+          </h2>
+
+          <p className="text-sm text-secondary mt-2 max-w-md leading-relaxed">
+            Fitur laporan operasional HR hanya tersedia untuk akun
+            Administrator. Akun demonstrasi tidak memiliki akses ke data
+            kehadiran maupun penggajian.
+          </p>
+
+          <div className="mt-6 px-4 py-2 bg-amber-50 border border-amber-200 rounded text-xs font-medium text-amber-700">
+            Fitur ini hanya dapat diakses oleh HR Administrator.
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -81,7 +183,7 @@ export default function ReportsPage() {
           </button>
         </div>
 
-        {/* Filter Bar (No print) */}
+        {/* Filter Bar */}
         <div className="bg-surface border border-border rounded p-4 flex flex-col sm:flex-row gap-3 items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <button
@@ -94,6 +196,7 @@ export default function ReportsPage() {
             >
               Laporan Kehadiran
             </button>
+
             {isHr && (
               <button
                 onClick={() => setReportType("payroll")}
@@ -151,6 +254,7 @@ export default function ReportsPage() {
                 Periode: {selectedMonth} • Dicetak oleh: {currentUser?.fullName} ({currentUser?.role})
               </div>
             </div>
+
             <div className="text-right text-[11px] text-secondary font-mono">
               Tanggal Cetak: {new Date().toLocaleDateString("id-ID")}
             </div>
@@ -167,7 +271,6 @@ export default function ReportsPage() {
           ) : reportType === "attendance" ? (
             /* Laporan Kehadiran */
             <div className="space-y-5">
-              {/* Stat Summary Card */}
               <div className="grid grid-cols-4 gap-3">
                 <div className="p-3 bg-slate-50 border border-border rounded">
                   <div className="text-[11px] text-secondary">Total Kehadiran</div>
@@ -175,18 +278,21 @@ export default function ReportsPage() {
                     {reportData.summary?.totalRecords}
                   </div>
                 </div>
+
                 <div className="p-3 bg-success-light border border-success/30 rounded">
                   <div className="text-[11px] text-success font-medium">Tepat Waktu</div>
                   <div className="text-lg font-bold text-success mt-1">
                     {reportData.summary?.onTimeCount}
                   </div>
                 </div>
+
                 <div className="p-3 bg-danger-light border border-danger/30 rounded">
                   <div className="text-[11px] text-danger font-medium">Terlambat (&gt; 08.10)</div>
                   <div className="text-lg font-bold text-danger mt-1">
                     {reportData.summary?.lateCount}
                   </div>
                 </div>
+
                 <div className="p-3 bg-warning-light border border-warning/30 rounded">
                   <div className="text-[11px] text-warning font-medium">Tidak Lengkap (1 scan)</div>
                   <div className="text-lg font-bold text-warning mt-1">
@@ -210,6 +316,7 @@ export default function ReportsPage() {
                       <th className="py-2.5 px-3">Hasil Pemeriksaan HR</th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-border text-slate-800">
                     {reportData.records?.map((r: any) => (
                       <tr key={r.id}>
@@ -266,14 +373,18 @@ export default function ReportsPage() {
                     {reportData.summary?.totalEmployees}
                   </div>
                 </div>
+
                 <div className="p-3 bg-slate-50 border border-border rounded">
                   <div className="text-[11px] text-secondary">Total Gaji Pokok</div>
                   <div className="text-base font-bold text-slate-800 mt-1 font-mono">
                     Rp {reportData.summary?.totalBasic?.toLocaleString("id-ID")}
                   </div>
                 </div>
+
                 <div className="p-3 bg-primary-light border border-primary/20 rounded">
-                  <div className="text-[11px] text-primary font-semibold">Total Pengeluaran Gaji Bersih</div>
+                  <div className="text-[11px] text-primary font-semibold">
+                    Total Pengeluaran Gaji Bersih
+                  </div>
                   <div className="text-base font-bold text-primary mt-1 font-mono">
                     Rp {reportData.summary?.totalNet?.toLocaleString("id-ID")}
                   </div>
@@ -296,6 +407,7 @@ export default function ReportsPage() {
                       </th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-border text-slate-800">
                     {reportData.records?.map((r: any) => (
                       <tr key={r.id}>

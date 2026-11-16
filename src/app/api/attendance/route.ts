@@ -11,6 +11,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (user.role === "DEMO") {
+  return NextResponse.json(
+    { error: "Akun DEMO tidak memiliki akses ke data kehadiran." },
+    { status: 403 }
+  );
+}
+
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
     const month = searchParams.get("month"); // e.g. "2026-11"
@@ -31,11 +38,13 @@ export async function GET(req: NextRequest) {
         ],
       };
     } else if (user.role === "HR") {
-      if (departmentId) {
-        where.employee = { departmentId };
-      }
+    if (departmentId) {
+      where.employee = { departmentId };
     }
-
+  } else if (user.role === "DEMO") {
+    // DEMO hanya digunakan untuk melihat data simulasi
+    // Tidak perlu filter karena database berisi data dummy
+  }
     if (date) {
       where.date = date;
     } else if (month) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
   UploadCloud,
@@ -21,6 +21,24 @@ export default function FingerprintImportPage() {
   const [validationResult, setValidationResult] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+        setCurrentUser(data.user);
+      } catch (error) {
+        console.error("Gagal memeriksa pengguna:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -114,6 +132,43 @@ export default function FingerprintImportPage() {
     document.body.removeChild(link);
   };
 
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-secondary">Memuat halaman...</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (currentUser?.role !== "HR") {
+    return (
+      <AppLayout>
+        <div className="min-h-[60vh] flex items-center justify-center p-6">
+          <div className="max-w-md w-full text-center bg-white border border-border rounded-xl p-8 shadow-sm">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-100 flex items-center justify-center">
+              <UploadCloud className="w-8 h-8 text-amber-600" />
+            </div>
+
+            <h1 className="text-xl font-bold text-primary mb-2">
+              Akses Fitur Dibatasi
+            </h1>
+
+            <p className="text-sm text-secondary leading-relaxed mb-5">
+              Fitur Import Fingerprint hanya tersedia untuk HR / Admin.
+              Silakan gunakan Dashboard untuk melihat simulasi ANF Workforce.
+            </p>
+
+            <span className="inline-flex px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
+              DEMO · READ ONLY
+            </span>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -199,7 +254,7 @@ export default function FingerprintImportPage() {
           </form>
         </div>
 
-        {/* Ringkasan Hasil Validasi (PRD 7.1) */}
+        {/* Ringkasan Hasil Validasi */}
         {validationResult && (
           <div className="space-y-5">
             <div className="bg-surface border border-border rounded p-5">
@@ -294,9 +349,7 @@ export default function FingerprintImportPage() {
                         }
                       >
                         <td className="py-2 px-3 text-secondary">{row.rowNumber}</td>
-                        <td className="py-2 px-3 font-mono font-medium">
-                          {row.employeeCode}
-                        </td>
+                        <td className="py-2 px-3 font-mono font-medium">{row.employeeCode}</td>
                         <td className="py-2 px-3">{row.employeeName}</td>
                         <td className="py-2 px-3">{row.date}</td>
                         <td className="py-2 px-3 font-mono">{row.scanTime}</td>

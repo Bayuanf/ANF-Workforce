@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -11,12 +12,14 @@ import {
   X,
   AlertCircle,
   UserCheck,
+  Lock,
 } from "lucide-react";
 
 export default function LeaveRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionMissing, setSessionMissing] = useState(false);
 
   // Modal Form Ajukan Cuti/Izin
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -38,22 +41,61 @@ export default function LeaveRequestsPage() {
 
   const fetchRequests = async () => {
     setLoading(true);
+
     try {
       const res = await fetch("/api/leave-requests");
       const data = await res.json();
+
+      if (!res.ok) {
+        setRequests([]);
+        return;
+      }
+
       setRequests(data.requests || []);
-    } catch {} finally {
+    } catch {
+      setRequests([]);
+    } finally {
       setLoading(false);
     }
   };
 
+  // Periksa sesi dan role sebelum mengambil data cuti
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((userData) => {
+    const checkAccess = async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        const userData = await res.json();
+
+        if (!res.ok || !userData.user) {
+          setSessionMissing(true);
+          setLoading(false);
+          return;
+        }
+
         setCurrentUser(userData.user);
-        fetchRequests();
-      });
+
+        // DEMO tidak boleh mengakses halaman maupun API cuti
+        if (userData.user.role === "DEMO") {
+          setLoading(false);
+          return;
+        }
+
+        // Hanya pengguna yang sudah terautentikasi
+        // yang melanjutkan proses pengambilan data
+        if (
+          ["EMPLOYEE", "MANAGER", "HR"].includes(userData.user.role)
+        ) {
+          await fetchRequests();
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        setSessionMissing(true);
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
   }, []);
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
@@ -69,6 +111,7 @@ export default function LeaveRequestsPage() {
       });
 
       const data = await res.json();
+
       if (!res.ok) {
         setFormError(data.error || "Gagal mengajukan cuti/izin.");
         setSubmitting(false);
@@ -77,6 +120,7 @@ export default function LeaveRequestsPage() {
 
       setFormSuccess("Pengajuan cuti/izin berhasil dikirim ke atasan!");
       fetchRequests();
+
       setTimeout(() => {
         setShowCreateModal(false);
       }, 1000);
@@ -90,25 +134,37 @@ export default function LeaveRequestsPage() {
   const handleApprovalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeApproval) return;
+
     setFormError("");
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/leave-requests/${activeApproval.id}/approval`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: approvalStatus, reviewNotes }),
-      });
+      const res = await fetch(
+        `/api/leave-requests/${activeApproval.id}/approval`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            status: approvalStatus,
+            reviewNotes,
+          }),
+        }
+      );
 
       const data = await res.json();
+
       if (!res.ok) {
         setFormError(data.error || "Gagal memproses persetujuan.");
         setSubmitting(false);
         return;
       }
 
-      setFormSuccess(`Pengajuan berhasil di-${approvalStatus === "APPROVED" ? "setujui" : "tolak"}.`);
+      setFormSuccess(
+        `Pengajuan berhasil di-${approvalStatus === "APPROVED" ? "setujui" : "tolak"}.`
+      );
+
       fetchRequests();
+
       setTimeout(() => {
         setActiveApproval(null);
       }, 1000);
@@ -122,6 +178,7 @@ export default function LeaveRequestsPage() {
   const isEmployee = currentUser?.role === "EMPLOYEE";
   const isManager = currentUser?.role === "MANAGER";
   const isHr = currentUser?.role === "HR";
+  const isDemo = currentUser?.role === "DEMO";
 
   const getTypeName = (type: string) => {
     switch (type) {
@@ -135,6 +192,73 @@ export default function LeaveRequestsPage() {
         return "Lainnya";
     }
   };
+
+  // Tampilan loading
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p className="text-sm text-secondary">
+            Memeriksa akses pengguna...
+          </p>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Jika sesi tidak ditemukan
+  if (sessionMissing) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <AlertCircle className="w-10 h-10 text-warning mx-auto mb-3" />
+            <h2 className="text-lg font-bold text-primary">
+              Sesi Pengguna Tidak Ditemukan
+            </h2>
+            <p className="text-sm text-secondary mt-1">
+              Silakan login kembali untuk melanjutkan.
+            </p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Halaman khusus pembatasan akun DEMO
+  if (isDemo || (!isEmployee && !isManager && !isHr)) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[60vh] p-4">
+          <div className="max-w-md w-full bg-surface border border-border rounded-lg p-8 text-center shadow-sm">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-50 flex items-center justify-center">
+              <Lock className="w-8 h-8 text-amber-600" />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold tracking-wider mb-4">
+              DEMO · READ ONLY
+            </div>
+
+            <h2 className="text-lg font-bold text-primary mb-2">
+              Akses Fitur Dibatasi
+            </h2>
+
+            <p className="text-sm text-secondary leading-relaxed">
+              Akun demonstrasi hanya dapat mengakses Dashboard.
+              Fitur Pengajuan Cuti & Izin tidak tersedia untuk akun DEMO.
+            </p>
+
+            <div className="mt-6 pt-5 border-t border-border">
+              <p className="text-xs text-secondary">
+                Silakan gunakan menu Dashboard untuk melihat demonstrasi
+                ANF Workforce.
+              </p>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -247,7 +371,9 @@ export default function LeaveRequestsPage() {
                       <td className="py-3 px-4 text-[11px] text-secondary">
                         {req.reviewNotes ? (
                           <div>
-                            <span className="text-slate-800 font-medium">"{req.reviewNotes}"</span>
+                            <span className="text-slate-800 font-medium">
+                              "{req.reviewNotes}"
+                            </span>
                             <span className="block text-[10px]">
                               Oleh: {req.reviewer?.employee?.fullName || req.reviewer?.username}
                             </span>

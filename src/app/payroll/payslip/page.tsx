@@ -1,33 +1,69 @@
+
 "use client";
 
 import React, { useState, useEffect } from "react";
 import AppLayout from "@/components/layout/AppLayout";
 import {
-  Banknote,
   Printer,
-  Download,
-  Building2,
-  Calendar,
   AlertCircle,
+  LockKeyhole,
 } from "lucide-react";
 
 export default function PayslipPage() {
   const [payslips, setPayslips] = useState<any[]>([]);
   const [selectedSlip, setSelectedSlip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [sessionMissing, setSessionMissing] = useState(false);
 
   useEffect(() => {
-    fetch("/api/payroll/payslip")
-      .then((r) => r.json())
-      .then((data) => {
+    const checkUserAndFetchPayslips = async () => {
+      try {
+        // 1. Periksa sesi pengguna terlebih dahulu
+        const authRes = await fetch("/api/auth/me");
+        const authData = await authRes.json();
+
+        if (!authRes.ok || !authData.user) {
+          setSessionMissing(true);
+          setLoading(false);
+          return;
+        }
+
+        // 2. Blokir DEMO sebelum memanggil API slip gaji
+        if (authData.user.role === "DEMO") {
+          setAccessDenied(true);
+          setLoading(false);
+          return;
+        }
+
+        // 3. Ambil slip gaji untuk pengguna yang memiliki sesi
+        const res = await fetch("/api/payroll/payslip");
+        const data = await res.json();
+
+        if (res.status === 403) {
+          setAccessDenied(true);
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(data.error || "Gagal memuat slip gaji.");
+        }
+
         const list = data.payslips || [];
         setPayslips(list);
+
         if (list.length > 0) {
           setSelectedSlip(list[0]);
         }
+      } catch {
+        setLoadError(true);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+
+    checkUserAndFetchPayslips();
   }, []);
 
   const handlePrint = () => {
@@ -37,7 +73,7 @@ export default function PayslipPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        {/* Header (Disembunyikan saat dicetak) */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-primary">
@@ -48,40 +84,78 @@ export default function PayslipPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            {payslips.length > 0 && (
-              <>
-                <select
-                  value={selectedSlip?.id || ""}
-                  onChange={(e) => {
-                    const found = payslips.find((p) => p.id === e.target.value);
-                    setSelectedSlip(found);
-                  }}
-                  className="py-1.5 px-3 border border-border rounded text-xs bg-white text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  {payslips.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      Periode: {s.payrollPeriod?.name}
-                    </option>
-                  ))}
-                </select>
+          {!accessDenied && !loading && !loadError && !sessionMissing && payslips.length > 0 && (
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedSlip?.id || ""}
+                onChange={(e) => {
+                  const found = payslips.find(
+                    (p) => p.id === e.target.value
+                  );
+                  setSelectedSlip(found);
+                }}
+                className="py-1.5 px-3 border border-border rounded text-xs bg-white text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {payslips.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    Periode: {s.payrollPeriod?.name}
+                  </option>
+                ))}
+              </select>
 
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded hover:bg-primary-hover transition-colors shadow-sm"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak / Simpan PDF</span>
-                </button>
-              </>
-            )}
-          </div>
+              <button
+                onClick={handlePrint}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded hover:bg-primary-hover transition-colors shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Cetak / Simpan PDF</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Konten Slip Gaji */}
         {loading ? (
           <div className="py-12 text-center text-xs text-secondary bg-surface border border-border rounded">
             Memuat dokumen slip gaji...
+          </div>
+        ) : accessDenied ? (
+          <div className="py-12 text-center text-xs bg-surface border border-border rounded p-6">
+            <LockKeyhole className="w-9 h-9 text-secondary mx-auto mb-3" />
+
+            <div className="font-semibold text-slate-800">
+              Akses Informasi Penggajian Dibatasi
+            </div>
+
+            <p className="mt-2 text-secondary max-w-md mx-auto">
+              Akun DEMO tidak dapat membuka halaman ini karena informasi
+              penggajian bersifat rahasia dan hanya dapat diakses oleh
+              pengguna yang memiliki wewenang.
+            </p>
+
+            <p className="mt-2 text-[11px] text-secondary">
+              Ini merupakan pembatasan akses, bukan kesalahan sistem.
+            </p>
+          </div>
+        ) : sessionMissing ? (
+          <div className="py-12 text-center text-xs text-secondary bg-surface border border-border rounded p-6">
+            <AlertCircle className="w-8 h-8 text-secondary mx-auto mb-2 opacity-50" />
+            <div className="font-semibold text-slate-700">
+              Sesi pengguna tidak ditemukan.
+            </div>
+            <p className="mt-1 text-[11px] text-secondary">
+              Silakan login kembali untuk mengakses slip gaji.
+            </p>
+          </div>
+        ) : loadError ? (
+          <div className="py-12 text-center text-xs text-secondary bg-surface border border-border rounded p-6">
+            <AlertCircle className="w-8 h-8 text-secondary mx-auto mb-2 opacity-50" />
+            <div className="font-semibold text-slate-700">
+              Gagal memuat slip gaji.
+            </div>
+            <p className="mt-1 text-[11px] text-secondary">
+              Silakan coba muat ulang halaman.
+            </p>
           </div>
         ) : !selectedSlip ? (
           <div className="py-12 text-center text-xs text-secondary bg-surface border border-border rounded p-6">
@@ -90,7 +164,8 @@ export default function PayslipPage() {
               Belum ada slip gaji yang diterbitkan.
             </div>
             <p className="mt-1 text-[11px] text-secondary">
-              Slip gaji akan muncul secara otomatis setelah periode penggajian difinalisasi oleh HR.
+              Slip gaji akan muncul secara otomatis setelah periode
+              penggajian difinalisasi oleh HR.
             </p>
           </div>
         ) : (
@@ -144,7 +219,9 @@ export default function PayslipPage() {
                 </div>
                 <div className="flex">
                   <span className="w-28 text-secondary">Email</span>
-                  <span className="text-slate-700">: {selectedSlip.employee?.email}</span>
+                  <span className="text-slate-700">
+                    : {selectedSlip.employee?.email}
+                  </span>
                 </div>
               </div>
 
@@ -172,7 +249,6 @@ export default function PayslipPage() {
 
             {/* Tabel Rincian Penerimaan & Potongan */}
             <div className="grid grid-cols-2 gap-6 py-5 text-xs">
-              {/* Kolom Penerimaan */}
               <div>
                 <div className="font-bold text-slate-800 uppercase tracking-wider text-[11px] pb-1.5 border-b border-slate-300">
                   A. Penerimaan (Penghasilan)
@@ -210,7 +286,6 @@ export default function PayslipPage() {
                 </div>
               </div>
 
-              {/* Kolom Potongan */}
               <div>
                 <div className="font-bold text-slate-800 uppercase tracking-wider text-[11px] pb-1.5 border-b border-slate-300">
                   B. Potongan
@@ -236,7 +311,7 @@ export default function PayslipPage() {
               </div>
             </div>
 
-            {/* Total Gaji Bersih (Take Home Pay) */}
+            {/* Total Gaji Bersih */}
             <div className="p-4 bg-[#F8FAFC] border border-border rounded flex justify-between items-center text-sm font-bold mt-2">
               <span className="text-slate-900 uppercase tracking-wider">
                 GAJI BERSIH DITERIMA (TAKE HOME PAY)

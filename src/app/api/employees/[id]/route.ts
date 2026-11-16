@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
@@ -9,8 +10,20 @@ export async function GET(
 ) {
   try {
     const user = await getCurrentUser();
+
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // DEMO tidak boleh mengakses detail karyawan
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+        { error: "Akun DEMO tidak memiliki akses ke detail karyawan." },
+        { status: 403 }
+      );
     }
 
     const employee = await prisma.employee.findUnique({
@@ -37,15 +50,21 @@ export async function GET(
     });
 
     if (!employee) {
-      return NextResponse.json({ error: "Karyawan tidak ditemukan" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Karyawan tidak ditemukan" },
+        { status: 404 }
+      );
     }
 
-    // RBAC: Karyawan hanya bisa melihat profil sendiri
+    // Karyawan hanya bisa melihat profil sendiri
     if (user.role === "EMPLOYEE" && employee.userId !== user.id) {
-      return NextResponse.json({ error: "Akses ditolak." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Akses ditolak." },
+        { status: 403 }
+      );
     }
 
-    // Manager tidak boleh melihat gaji orang lain
+    // Manager dan pengguna non-HR tidak boleh melihat gaji orang lain
     if (user.role !== "HR" && employee.userId !== user.id) {
       const { basicSalary, ...rest } = employee;
       return NextResponse.json({ employee: rest });
@@ -53,7 +72,10 @@ export async function GET(
 
     return NextResponse.json({ employee });
   } catch (err: any) {
-    return NextResponse.json({ error: "Gagal memuat detail karyawan" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Gagal memuat detail karyawan" },
+      { status: 500 }
+    );
   }
 }
 
@@ -63,11 +85,16 @@ export async function PUT(
 ) {
   try {
     const user = await getCurrentUser();
+
     if (!user || user.role !== "HR") {
-      return NextResponse.json({ error: "Hanya HR yang diizinkan memperbarui data." }, { status: 403 });
+      return NextResponse.json(
+        { error: "Hanya HR yang diizinkan memperbarui data." },
+        { status: 403 }
+      );
     }
 
     const body = await req.json();
+
     const {
       fullName,
       phone,
@@ -85,7 +112,10 @@ export async function PUT(
     });
 
     if (!oldEmployee) {
-      return NextResponse.json({ error: "Karyawan tidak ditemukan" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Karyawan tidak ditemukan" },
+        { status: 404 }
+      );
     }
 
     const updatedEmployee = await prisma.$transaction(async (tx) => {
@@ -137,9 +167,16 @@ export async function PUT(
       ipAddress: req.headers.get("x-forwarded-for") || "127.0.0.1",
     });
 
-    return NextResponse.json({ success: true, employee: updatedEmployee });
+    return NextResponse.json({
+      success: true,
+      employee: updatedEmployee,
+    });
   } catch (err: any) {
     console.error("PUT /api/employees/[id] error:", err);
-    return NextResponse.json({ error: "Gagal memperbarui data karyawan." }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "Gagal memperbarui data karyawan." },
+      { status: 500 }
+    );
   }
 }

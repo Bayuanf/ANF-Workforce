@@ -33,3 +33,6 @@ scripts/seed.js
 
 scripts/test_system.js
 scripts/verify_reset_and_redesign.js
+
+# Demo account creation script
+create-demo.js

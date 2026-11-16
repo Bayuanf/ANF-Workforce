@@ -12,13 +12,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (user.role === "DEMO") {
+      return NextResponse.json(
+       { error: "Akun DEMO tidak memiliki akses ke data karyawan." },
+      { status: 403 }
+  );
+}
+
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search") || "";
     const departmentId = searchParams.get("departmentId") || "";
 
     const where: any = {};
 
-    // RBAC: Karyawan hanya profil sendiri, Manager hanya timnya, HR semua
+    // RBAC: Karyawan hanya profil sendiri, Manager hanya timnya,
+    // HR dapat melihat seluruh data karyawan
     if (user.role === "EMPLOYEE") {
       where.userId = user.id;
     } else if (user.role === "MANAGER") {
@@ -71,12 +79,18 @@ export async function GET(req: NextRequest) {
       orderBy: { employeeCode: "asc" },
     });
 
-    // Jika Manager atau Karyawan, sembunyikan basicSalary demi kerahasiaan sesuai PRD 4.2
-    const sanitized = employees.map((emp) => {
+      // Sembunyikan gaji dari DEMO dan pengguna non-HR lainnya
+      const sanitized = employees.map((emp) => {
+      if (user.role === "DEMO") {
+        const { basicSalary, ...rest } = emp;
+        return rest;
+      }
+
       if (user.role !== "HR" && emp.userId !== user.id) {
         const { basicSalary, ...rest } = emp;
         return rest;
       }
+
       return emp;
     });
 
